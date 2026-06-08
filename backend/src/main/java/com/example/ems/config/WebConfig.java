@@ -12,7 +12,8 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addMapping("/api/**")
                 .allowedOrigins(
                         "http://localhost:5173",   // Vite dev server
-                        "http://localhost:3000"     // Alternate dev port
+                        "http://localhost:3000",    // Alternate dev port
+                        "https://dlur2fc7a02ha.cloudfront.net" // Production CloudFront
                 )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
