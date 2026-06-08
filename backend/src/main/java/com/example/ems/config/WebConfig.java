@@ -9,14 +9,10 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/api/**")
-                .allowedOrigins(
-                        "http://localhost:5173", // Vite dev server
-                        "http://localhost:3000", // Alternate dev port
-                        // Replace CloudFront with your new S3 direct endpoint:
-                        "http://ems-frontend-d88f1796.s3-website-us-east-1.amazonaws.com")
+        registry.addMapping("/**")
+                .allowedOrigins("*") // In production, replace * with your S3 website URL
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
-                .allowCredentials(true);
+                .allowCredentials(false);
     }
 }
