@@ -67,16 +67,25 @@ locals {
 resource "local_file" "frontend_env" {
   filename = "${path.module}/../frontend/.env"
   content  = "VITE_API_URL=http://${aws_instance.app_server.public_ip}:8080/api"
+
+  # 🤖 This triggers your local machine to automatically rebuild the frontend 
+  # right after the new IP is written to the .env file!
+  provisioner "local-exec" {
+    command = "cd ${path.module}/../frontend && npm run build"
+  }
 }
 
 resource "aws_s3_object" "frontend_files" {
   for_each = fileset("${path.module}/../frontend/dist", "**/*")
 
-  bucket       = aws_s3_bucket.frontend_bucket.id
-  key          = each.value
-  source       = "${path.module}/../frontend/dist/${each.value}"
-  etag         = filemd5("${path.module}/../frontend/dist/${each.value}")
+  bucket     = aws_s3_bucket.frontend_bucket.id
+  key        = each.value
+  source     = "${path.module}/../frontend/dist/${each.value}"
+  etag       = filemd5("${path.module}/../frontend/dist/${each.value}")
   content_type = lookup(local.content_types, element(split(".", each.value), length(split(".", each.value)) - 1), "binary/octet-stream")
+
+  # ⏳ Wait until the .env file is updated and the app is rebuilt before uploading!
+  depends_on = [local_file.frontend_env]
 }
 
 # Add this to get your direct frontend link
