@@ -5,7 +5,7 @@ resource "random_id" "bucket_suffix" {
 # S3 Bucket for React
 resource "aws_s3_bucket" "frontend_bucket" {
   bucket        = "ems-frontend-${random_id.bucket_suffix.hex}"
-  force_destroy = true # Useful for learning environments
+  force_destroy = true 
 }
 
 # S3 Bucket Website Configuration
@@ -17,7 +17,7 @@ resource "aws_s3_bucket_website_configuration" "frontend_website" {
   }
 
   error_document {
-    key = "index.html" # For React Router
+    key = "index.html" 
   }
 }
 
@@ -50,98 +50,31 @@ resource "aws_s3_bucket_policy" "frontend_policy" {
   })
 }
 
-# CloudFront Distribution
-resource "aws_cloudfront_distribution" "frontend_cdn" {
-  origin {
-    # We use the S3 website endpoint rather than the S3 bucket regional domain
-    # This allows S3 to process the index.html and error.html properly
-    domain_name = aws_s3_bucket_website_configuration.frontend_website.website_endpoint
-    origin_id   = "S3-${aws_s3_bucket.frontend_bucket.id}"
-
-    custom_origin_config {
-      http_port              = 80
-      https_port             = 443
-      origin_protocol_policy = "http-only"
-      origin_ssl_protocols   = ["TLSv1.2"]
-    }
+locals {
+  content_types = {
+    "html" = "text/html"
+    "css"  = "text/css"
+    "js"   = "application/javascript"
+    "json" = "application/json"
+    "png"  = "image/png"
+    "jpg"  = "image/jpeg"
+    "jpeg" = "image/jpeg"
+    "svg"  = "image/svg+xml"
+    "ico"  = "image/x-icon"
   }
+}
 
-  origin {
-    domain_name = aws_instance.app_server.public_dns
-    origin_id   = "EC2-${aws_instance.app_server.id}"
+resource "aws_s3_object" "frontend_files" {
+  for_each = fileset("${path.module}/../frontend/dist", "**/*")
 
-    custom_origin_config {
-      http_port              = 8080
-      https_port             = 443
-      origin_protocol_policy = "http-only"
-      origin_ssl_protocols   = ["TLSv1.2"]
-    }
-  }
+  bucket       = aws_s3_bucket.frontend_bucket.id
+  key          = each.value
+  source       = "${path.module}/../frontend/dist/${each.value}"
+  etag         = filemd5("${path.module}/../frontend/dist/${each.value}")
+  content_type = lookup(local.content_types, element(split(".", each.value), length(split(".", each.value)) - 1), "binary/octet-stream")
+}
 
-  enabled             = true
-  is_ipv6_enabled     = true
-  default_root_object = "index.html"
-
-  default_cache_behavior {
-    allowed_methods  = ["GET", "HEAD"]
-    cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "S3-${aws_s3_bucket.frontend_bucket.id}"
-
-    forwarded_values {
-      query_string = false
-      cookies {
-        forward = "none"
-      }
-    }
-
-    viewer_protocol_policy = "redirect-to-https"
-    min_ttl                = 0
-    default_ttl            = 3600
-    max_ttl                = 86400
-  }
-
-  ordered_cache_behavior {
-    path_pattern     = "/api/*"
-    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-    cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "EC2-${aws_instance.app_server.id}"
-
-    forwarded_values {
-      query_string = true
-      headers      = ["Authorization", "Host", "Origin", "Referer"]
-      cookies {
-        forward = "all"
-      }
-    }
-
-    viewer_protocol_policy = "redirect-to-https"
-    min_ttl                = 0
-    default_ttl            = 0
-    max_ttl                = 0
-  }
-
-  # For React Router to work (redirect 404 to index.html)
-  custom_error_response {
-    error_caching_min_ttl = 10
-    error_code            = 404
-    response_code         = 200
-    response_page_path    = "/index.html"
-  }
-
-  custom_error_response {
-    error_caching_min_ttl = 10
-    error_code            = 403
-    response_code         = 200
-    response_page_path    = "/index.html"
-  }
-
-  restrictions {
-    geo_restriction {
-      restriction_type = "none"
-    }
-  }
-
-  viewer_certificate {
-    cloudfront_default_certificate = true
-  }
+# Add this to get your direct frontend link
+output "frontend_s3_website_url" {
+  value = aws_s3_bucket_website_configuration.frontend_website.website_endpoint
 }
