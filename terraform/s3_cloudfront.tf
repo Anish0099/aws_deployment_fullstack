@@ -64,6 +64,11 @@ locals {
   }
 }
 
+resource "local_file" "frontend_env" {
+  filename = "${path.module}/../frontend/.env"
+  content  = "VITE_API_URL=http://${aws_instance.app_server.public_ip}:8080/api"
+}
+
 resource "aws_s3_object" "frontend_files" {
   for_each = fileset("${path.module}/../frontend/dist", "**/*")
 
