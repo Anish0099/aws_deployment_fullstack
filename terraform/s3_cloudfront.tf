@@ -65,7 +65,7 @@ locals {
 }
 
 resource "local_file" "frontend_env" {
-  filename = "${path.module}/../frontend/.env"
+  filename = "${path.module}/../frontend/.env.production"
   content  = "VITE_API_URL=http://${aws_instance.app_server.public_ip}:8080/api"
 
   # 🤖 This triggers your local machine to automatically rebuild the frontend 
