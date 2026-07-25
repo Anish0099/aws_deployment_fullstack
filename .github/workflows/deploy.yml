@@ -20,6 +20,30 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ secrets.AWS_REGION }}
 
+    # 1. AUTOMATED S3 BUCKET CREATION (Zero manual CLI steps)
+    - name: Ensure S3 Bucket Exists for Terraform State
+      run: |
+        BUCKET_NAME="my-app-tfstate-911167889594"
+        if ! aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
+          echo "Bucket does not exist. Creating S3 bucket $BUCKET_NAME..."
+          aws s3 mb "s3://$BUCKET_NAME" --region ${{ secrets.AWS_REGION }}
+        else
+          echo "Bucket $BUCKET_NAME already exists."
+        fi
+
+    # 2. TERRAFORM AUTOMATION
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+
+    - name: Terraform Init
+      working-directory: ./infra
+      run: terraform init
+
+    - name: Terraform Apply
+      working-directory: ./infra
+      run: terraform apply -auto-approve
+
+    # 3. DOCKER BUILD & PUSH TO ECR
     - name: Log in to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
@@ -44,6 +68,7 @@ jobs:
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
+    # 4. REDEPLOY ECS SERVICE
     - name: Force ECS Redeployment
       run: |
         aws ecs update-service --cluster production-cluster --service fullstack-service --force-new-deployment
