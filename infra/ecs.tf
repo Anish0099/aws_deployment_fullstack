@@ -57,14 +57,42 @@ resource "aws_ecs_task_definition" "app" {
       name         = "backend"
       image        = "${aws_ecr_repository.backend.repository_url}:latest"
       essential    = true
-      portMappings = [{ containerPort = 8080 }]
+      portMappings = [
+      {
+        containerPort = 8080
+        hostPort      = 8080
+      }
+    ]
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = "/ecs/fullstack-app"
+        "awslogs-region"        = "us-east-1"
+        "awslogs-stream-prefix" = "backend"
+        "awslogs-create-group"  = "true"
+      }
+    }
     },
     {
       name         = "frontend"
       image        = "${aws_ecr_repository.frontend.repository_url}:latest"
       essential    = true
-      portMappings = [{ containerPort = 80 }]
+      portMappings = [
+      {
+        containerPort = 80
+        hostPort      = 80
+      }
+    ]
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = "/ecs/fullstack-app"
+        "awslogs-region"        = "us-east-1"
+        "awslogs-stream-prefix" = "frontend"
+        "awslogs-create-group"  = "true"
+      }
     }
+  }
   ])
 }
 
