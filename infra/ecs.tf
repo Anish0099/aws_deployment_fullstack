@@ -1,7 +1,49 @@
+# Fetch Default VPC & Subnets automatically
+data "aws_vpc" "default" {
+  default = true
+}
+
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+}
+
+# Security Group to allow inbound traffic to Frontend (80) and Backend (8080)
+resource "aws_security_group" "ecs_tasks" {
+  name        = "ecs-tasks-security-group"
+  description = "Allow HTTP inbound traffic for fullstack app"
+  vpc_id      = data.aws_vpc.default.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# ECS Cluster
 resource "aws_ecs_cluster" "main" {
   name = "production-cluster"
 }
 
+# Task Definition
 resource "aws_ecs_task_definition" "app" {
   family                   = "fullstack-app"
   network_mode             = "awsvpc"
@@ -12,20 +54,21 @@ resource "aws_ecs_task_definition" "app" {
 
   container_definitions = jsonencode([
     {
-      name      = "backend"
-      image     = "${aws_ecr_repository.backend.repository_url}:latest"
-      essential = true
+      name         = "backend"
+      image        = "${aws_ecr_repository.backend.repository_url}:latest"
+      essential    = true
       portMappings = [{ containerPort = 8080 }]
     },
     {
-      name      = "frontend"
-      image     = "${aws_ecr_repository.frontend.repository_url}:latest"
-      essential = true
+      name         = "frontend"
+      image        = "${aws_ecr_repository.frontend.repository_url}:latest"
+      essential    = true
       portMappings = [{ containerPort = 80 }]
     }
   ])
 }
 
+# ECS Service
 resource "aws_ecs_service" "main" {
   name            = "fullstack-service"
   cluster         = aws_ecs_cluster.main.id
@@ -34,7 +77,7 @@ resource "aws_ecs_service" "main" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = [aws_subnet.public_a.id, aws_subnet.public_b.id]
+    subnets          = data.aws_subnets.default.ids
     security_groups  = [aws_security_group.ecs_tasks.id]
     assign_public_ip = true
   }
