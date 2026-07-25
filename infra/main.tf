@@ -2,7 +2,7 @@ terraform {
   backend "s3" {
     bucket = "my-app-tfstate-911167889594" # Globally unique bucket name
     key    = "production/terraform.tfstate"
-    region = "ap-south-1"                  # Set to your AWS region
+    region = "us-east-1"                  # Set to your AWS region
   }
   required_providers {
     aws = {
@@ -13,5 +13,5 @@ terraform {
 }
 
 provider "aws" {
-  region = "ap-south-1"                    # Set to your AWS region
+  region = "us-east-1"                    # Set to your AWS region
 }
