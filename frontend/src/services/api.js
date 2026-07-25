@@ -1,9 +1,9 @@
 import axios from 'axios';
 
-// Base URL — points to Spring Boot backend
-// In development: http://localhost:8080
-// In production: update this to your EC2 public IP or domain
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+// Base URL configuration:
+// In production (AWS): It falls back to '/api', which routes through your Nginx proxy.
+// In local development: You can create a .env file and set VITE_API_URL=http://localhost:8080/api
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
