@@ -1,28 +1,20 @@
-# 1. DB Subnet Group (Uses Default VPC Subnets)
+# 1. DB Subnet Group using Private DB Subnets
 resource "aws_db_subnet_group" "default" {
   name       = "ems-db-subnet-group"
-  subnet_ids = data.aws_subnets.default.ids
+  subnet_ids = aws_subnet.private_db[*].id
 }
 
-# 2. Security Group for RDS (Allows incoming traffic on 3306 ONLY from ECS tasks)
+# 2. Security Group (Port 3306 ONLY from ECS tasks)
 resource "aws_security_group" "rds" {
   name        = "rds-security-group"
   description = "Allow inbound MySQL traffic from ECS tasks"
-  vpc_id      = data.aws_vpc.default.id
+  vpc_id      = aws_vpc.main.id
 
   ingress {
     from_port       = 3306
     to_port         = 3306
     protocol        = "tcp"
     security_groups = [aws_security_group.ecs_tasks.id]
-  }
-
-  # Rule 2: ADDED -> Allows DBeaver / Local Machine to connect
-  ingress {
-    from_port   = 3306
-    to_port     = 3306
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -33,7 +25,7 @@ resource "aws_security_group" "rds" {
   }
 }
 
-# 3. RDS MySQL Instance (AWS Free Tier Eligible)
+# 3. Private RDS Instance
 resource "aws_db_instance" "mysql" {
   identifier             = "ems-mysql-db"
   allocated_storage      = 20
@@ -46,5 +38,5 @@ resource "aws_db_instance" "mysql" {
   db_subnet_group_name   = aws_db_subnet_group.default.name
   vpc_security_group_ids = [aws_security_group.rds.id]
   skip_final_snapshot    = true
-  publicly_accessible    = true
+  publicly_accessible    = false # Hardened: No public access
 }
