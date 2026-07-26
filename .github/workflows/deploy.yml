@@ -1,4 +1,4 @@
-name: Build & Deploy to AWS ECS
+name: Build & Deploy to AWS (ECS Backend + S3/CloudFront Frontend)
 
 on:
   push:
@@ -20,7 +20,7 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ secrets.AWS_REGION }}
 
-    # 1. AUTOMATED S3 BUCKET CREATION (Zero manual CLI steps)
+    # 1. ENSURE S3 TERRAFORM STATE BUCKET EXISTS
     - name: Ensure S3 Bucket Exists for Terraform State
       run: |
         BUCKET_NAME="my-app-tfstate-911167889594"
@@ -31,7 +31,7 @@ jobs:
           echo "Bucket $BUCKET_NAME already exists."
         fi
 
-    # 2. TERRAFORM AUTOMATION
+    # 2. TERRAFORM APPLY & EXTRACT OUTPUTS
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
 
@@ -43,7 +43,14 @@ jobs:
       working-directory: ./infra
       run: terraform apply -auto-approve
 
-    # 3. DOCKER BUILD & PUSH TO ECR
+    - name: Save Terraform Outputs to Environment
+      working-directory: ./infra
+      run: |
+        echo "S3_BUCKET=$(terraform output -raw s3_bucket_name)" >> $GITHUB_ENV
+        echo "CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id)" >> $GITHUB_ENV
+        echo "ALB_DNS=$(terraform output -raw alb_dns_name)" >> $GITHUB_ENV
+
+    # 3. BUILD & PUSH BACKEND TO ECR
     - name: Log in to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
@@ -58,17 +65,28 @@ jobs:
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
-    - name: Build, Tag, and Push Frontend Image
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        ECR_REPOSITORY: my-app-frontend
-        IMAGE_TAG: ${{ github.sha }}
-      run: |
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest ./frontend
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-
-    # 4. REDEPLOY ECS SERVICE
+    # 4. REDEPLOY BACKEND ECS SERVICE
     - name: Force ECS Redeployment
       run: |
         aws ecs update-service --cluster production-cluster --service fullstack-service --force-new-deployment
+
+    # 5. BUILD REACT FRONTEND
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 18
+
+    - name: Build Frontend Artifacts
+      run: |
+        cd frontend
+        npm ci
+        VITE_API_URL="http://${{ env.ALB_DNS }}/api" npm run build
+
+    # 6. DEPLOY FRONTEND TO S3 & CLOUDFRONT
+    - name: Sync Frontend Build to S3
+      run: |
+        aws s3 sync ./frontend/dist s3://${{ env.S3_BUCKET }} --delete
+
+    - name: Invalidate CloudFront Cache
+      run: |
+        aws cloudfront create-invalidation --distribution-id ${{ env.CLOUDFRONT_ID }} --paths "/*"

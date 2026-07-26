@@ -1,4 +1,3 @@
-# Fetch Default VPC & Subnets automatically
 data "aws_vpc" "default" {
   default = true
 }
@@ -13,13 +12,12 @@ data "aws_subnets" "default" {
 # Security Group for ECS Tasks
 resource "aws_security_group" "ecs_tasks" {
   name        = "ecs-tasks-security-group"
-  description = "Allow HTTP inbound traffic from ALB only"
-  vpc_id      = aws_vpc.main.id
+  description = "Allow HTTP inbound traffic on port 8080 from ALB"
+  vpc_id      = data.aws_vpc.default.id
 
-  # Allow inbound on Port 80 from ALB
   ingress {
-    from_port       = 80
-    to_port         = 80
+    from_port       = 8080
+    to_port         = 8080
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
@@ -37,13 +35,13 @@ resource "aws_ecs_cluster" "main" {
   name = "production-cluster"
 }
 
-# Task Definition
+# Task Definition (Backend Only)
 resource "aws_ecs_task_definition" "app" {
   family                   = "fullstack-app"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = "512"
-  memory                   = "1024"
+  cpu                      = "256"
+  memory                   = "512"
   execution_role_arn       = aws_iam_role.ecs_execution_role.arn
 
   container_definitions = jsonencode([
@@ -57,7 +55,6 @@ resource "aws_ecs_task_definition" "app" {
           hostPort      = 8080
         }
       ]
-      # Inject RDS connection parameters into Spring Boot
       environment = [
         { name = "SPRING_PROFILES_ACTIVE", value = "prod" },
         { name = "DB_HOST",                value = aws_db_instance.mysql.address },
@@ -75,26 +72,6 @@ resource "aws_ecs_task_definition" "app" {
           "awslogs-create-group"  = "true"
         }
       }
-    },
-    {
-      name      = "frontend"
-      image     = "${aws_ecr_repository.frontend.repository_url}:latest"
-      essential = true
-      portMappings = [
-        {
-          containerPort = 80
-          hostPort      = 80
-        }
-      ]
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = "/ecs/fullstack-app"
-          "awslogs-region"        = "us-east-1"
-          "awslogs-stream-prefix" = "frontend"
-          "awslogs-create-group"  = "true"
-        }
-      }
     }
   ])
 }
@@ -108,21 +85,20 @@ resource "aws_ecs_service" "main" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = aws_subnet.private_app[*].id # Placed in Private Subnets
+    subnets          = data.aws_subnets.default.ids
     security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = false # Secure: No public IP
+    assign_public_ip = true
   }
 
   load_balancer {
     target_group_arn = aws_lb_target_group.app.arn
-    container_name   = "frontend"
-    container_port   = 80
+    container_name   = "backend"
+    container_port   = 8080
   }
 
   depends_on = [aws_lb_listener.http]
 }
 
-# Pre-creates the log group in CloudWatch
 resource "aws_cloudwatch_log_group" "ecs_logs" {
   name              = "/ecs/fullstack-app"
   retention_in_days = 7
