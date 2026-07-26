@@ -110,3 +110,9 @@ resource "aws_ecs_service" "main" {
     assign_public_ip = true
   }
 }
+
+# Pre-creates the log group in CloudWatch
+resource "aws_cloudwatch_log_group" "ecs_logs" {
+  name              = "/ecs/fullstack-app"
+  retention_in_days = 7
+}
