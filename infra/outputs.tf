@@ -1,8 +1,3 @@
-output "alb_dns_name" {
-  description = "The public URL of your Application Load Balancer"
-  value       = "http://${aws_lb.main.dns_name}"
-}
-
 output "s3_bucket_name" {
   value       = aws_s3_bucket.frontend.id
   description = "Name of the S3 bucket storing frontend build files"
