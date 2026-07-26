@@ -107,7 +107,7 @@ function EmployeeList() {
                   <th>Employee</th>
                   <th>Department</th>
                   <th>Salary</th>
-                  <th>Actions</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
