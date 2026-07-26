@@ -80,7 +80,7 @@ jobs:
       run: |
         cd frontend
         npm ci
-        VITE_API_URL="http://${{ env.ALB_DNS }}/api" npm run build
+        VITE_API_URL="/api" npm run build
 
     # 6. DEPLOY FRONTEND TO S3 & CLOUDFRONT
     - name: Sync Frontend Build to S3

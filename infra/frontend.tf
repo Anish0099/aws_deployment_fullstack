@@ -11,7 +11,7 @@ resource "aws_s3_bucket" "frontend" {
   force_destroy = true
 }
 
-# 3. Block Public Access to S3 (Access restricted to CloudFront only)
+# 3. Block Public Access to S3
 resource "aws_s3_bucket_public_access_block" "frontend" {
   bucket                  = aws_s3_bucket.frontend.id
   block_public_acls       = true
@@ -35,12 +35,27 @@ resource "aws_cloudfront_distribution" "frontend" {
   is_ipv6_enabled     = true
   default_root_object = "index.html"
 
+  # --- ORIGIN 1: S3 Bucket (Frontend Static Files) ---
   origin {
     domain_name              = aws_s3_bucket.frontend.bucket_regional_domain_name
     origin_id                = "S3-EMS-Frontend"
     origin_access_control_id = aws_cloudfront_origin_access_control.oac.id
   }
 
+  # --- ORIGIN 2: Application Load Balancer (Backend API) ---
+  origin {
+    domain_name = aws_lb.main.dns_name
+    origin_id   = "ALB-EMS-Backend"
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  # --- DEFAULT BEHAVIOR: Serves Static React Files from S3 ---
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
     cached_methods   = ["GET", "HEAD"]
@@ -59,7 +74,28 @@ resource "aws_cloudfront_distribution" "frontend" {
     max_ttl                = 86400
   }
 
-  # SPA Routing Fallback for React Router (403/404 -> index.html)
+  # --- ORDERED BEHAVIOR: Routes /api/* directly to ALB ---
+  ordered_cache_behavior {
+    path_pattern     = "/api/*"
+    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "ALB-EMS-Backend"
+
+    forwarded_values {
+      query_string = true
+      headers      = ["*"]
+      cookies {
+        forward = "all"
+      }
+    }
+
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 0
+    max_ttl                = 0
+  }
+
+  # SPA Fallback Routing for React Router
   custom_error_response {
     error_code            = 403
     response_code         = 200
@@ -85,7 +121,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 }
 
-# 6. S3 Bucket Policy (Grants read access strictly to CloudFront OAC)
+# 6. S3 Bucket Policy
 resource "aws_s3_bucket_policy" "frontend" {
   bucket = aws_s3_bucket.frontend.id
 
