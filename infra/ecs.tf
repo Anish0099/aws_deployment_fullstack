@@ -1,19 +1,8 @@
-data "aws_vpc" "default" {
-  default = true
-}
-
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
-}
-
-# Security Group for ECS Tasks
+# Security Group for ECS Tasks (Custom VPC)
 resource "aws_security_group" "ecs_tasks" {
   name        = "ecs-tasks-security-group"
   description = "Allow HTTP inbound traffic on port 8080 from ALB"
-  vpc_id      = data.aws_vpc.default.id
+  vpc_id      = aws_vpc.main.id # <--- Custom VPC
 
   ingress {
     from_port       = 8080
@@ -85,7 +74,7 @@ resource "aws_ecs_service" "main" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = data.aws_subnets.default.ids
+    subnets          = aws_subnet.public[*].id # <--- FIXED: Uses subnets from aws_vpc.main
     security_groups  = [aws_security_group.ecs_tasks.id]
     assign_public_ip = true
   }
