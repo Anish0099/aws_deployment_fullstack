@@ -9,6 +9,6 @@ output "cloudfront_distribution_id" {
 }
 
 output "alb_dns_name" {
-  value       = aws_lb.app.dns_name
+  value       = aws_lb.main.dns_name
   description = "Application Load Balancer DNS Endpoint for backend API"
 }

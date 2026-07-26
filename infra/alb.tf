@@ -35,7 +35,7 @@ resource "aws_lb" "main" {
 # Target Group (Forwards traffic to Port 80 on ECS)
 resource "aws_lb_target_group" "app" {
   name        = "ems-target-group"
-  port        = 80
+  port        = 8080
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
   target_type = "ip"
