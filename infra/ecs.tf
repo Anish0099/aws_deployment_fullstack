@@ -54,45 +54,54 @@ resource "aws_ecs_task_definition" "app" {
 
   container_definitions = jsonencode([
     {
-      name         = "backend"
-      image        = "${aws_ecr_repository.backend.repository_url}:latest"
-      essential    = true
+      name      = "backend"
+      image     = "${aws_ecr_repository.backend.repository_url}:latest"
+      essential = true
       portMappings = [
-      {
-        containerPort = 8080
-        hostPort      = 8080
+        {
+          containerPort = 8080
+          hostPort      = 8080
+        }
+      ]
+      # Inject RDS connection parameters into Spring Boot
+      environment = [
+        { name = "SPRING_PROFILES_ACTIVE", value = "prod" },
+        { name = "DB_HOST",                value = aws_db_instance.mysql.address },
+        { name = "DB_PORT",                value = "3306" },
+        { name = "DB_NAME",                value = "emsdb" },
+        { name = "DB_USERNAME",            value = "admin" },
+        { name = "DB_PASSWORD",            value = "SuperSecretPassword123!" }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/fullstack-app"
+          "awslogs-region"        = "us-east-1"
+          "awslogs-stream-prefix" = "backend"
+          "awslogs-create-group"  = "true"
+        }
       }
-    ]
-    logConfiguration = {
-      logDriver = "awslogs"
-      options = {
-        "awslogs-group"         = "/ecs/fullstack-app"
-        "awslogs-region"        = "us-east-1"
-        "awslogs-stream-prefix" = "backend"
-        "awslogs-create-group"  = "true"
-      }
-    }
     },
     {
-      name         = "frontend"
-      image        = "${aws_ecr_repository.frontend.repository_url}:latest"
-      essential    = true
+      name      = "frontend"
+      image     = "${aws_ecr_repository.frontend.repository_url}:latest"
+      essential = true
       portMappings = [
-      {
-        containerPort = 80
-        hostPort      = 80
-      }
-    ]
-    logConfiguration = {
-      logDriver = "awslogs"
-      options = {
-        "awslogs-group"         = "/ecs/fullstack-app"
-        "awslogs-region"        = "us-east-1"
-        "awslogs-stream-prefix" = "frontend"
-        "awslogs-create-group"  = "true"
+        {
+          containerPort = 80
+          hostPort      = 80
+        }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/fullstack-app"
+          "awslogs-region"        = "us-east-1"
+          "awslogs-stream-prefix" = "frontend"
+          "awslogs-create-group"  = "true"
+        }
       }
     }
-  }
   ])
 }
 
