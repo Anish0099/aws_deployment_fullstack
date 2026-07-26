@@ -10,24 +10,18 @@ data "aws_subnets" "default" {
   }
 }
 
-# Security Group to allow inbound traffic to Frontend (80) and Backend (8080)
+# Security Group for ECS Tasks
 resource "aws_security_group" "ecs_tasks" {
   name        = "ecs-tasks-security-group"
-  description = "Allow HTTP inbound traffic for fullstack app"
-  vpc_id      = data.aws_vpc.default.id
+  description = "Allow HTTP inbound traffic from ALB only"
+  vpc_id      = aws_vpc.main.id
 
+  # Allow inbound on Port 80 from ALB
   ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
   }
 
   egress {
@@ -114,10 +108,18 @@ resource "aws_ecs_service" "main" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = data.aws_subnets.default.ids
+    subnets          = aws_subnet.private_app[*].id # Placed in Private Subnets
     security_groups  = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = true
+    assign_public_ip = false # Secure: No public IP
   }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.app.arn
+    container_name   = "frontend"
+    container_port   = 80
+  }
+
+  depends_on = [aws_lb_listener.http]
 }
 
 # Pre-creates the log group in CloudWatch
